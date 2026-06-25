@@ -594,7 +594,7 @@
           </div>
 
           <div class="btn-row">
-            <button class="btn primary" onclick="go(9)">Reflect &amp; Debrief →</button>
+            <button class="btn primary" onclick="saveData(); go(9);">Reflect &amp; Debrief →</button>
           </div>
         </div>
       </div>
@@ -673,6 +673,15 @@
   let selectedDept = null;
   let timerInt = null;
   let timerSecs = 300;
+
+  // NEW
+let answers = {};
+
+const STEPS = {
+    1:5,
+    2:15,
+    ...
+};
   const STEPS = {1:5,2:15,3:25,4:40,5:55,6:65,7:75,8:87,9:93,10:100};
 
   function go(n) {
@@ -699,10 +708,16 @@
   }
 
   function choose(el, val, id) {
+
+    answers[id] = val;
+
     const row = el.closest('.opts');
+
     row.querySelectorAll('.opt').forEach(b=>b.className='opt');
-    el.classList.add(val==='yes'?'chosen-yes':'chosen-no');
-  }
+
+    el.classList.add(val==='yes' ? 'chosen-yes' : 'chosen-no');
+
+}
 
   function startTimer() {
     timerSecs = 300;
@@ -764,6 +779,44 @@
     }
     draw();
   }
+
+  async function saveData() {
+
+    const data = {
+
+        name: document.getElementById("playerName").value,
+
+        department: selectedDept,
+
+        d1: answers.d1 || "",
+
+        d2: answers.d2 || "",
+
+        d3: answers.d3 || "",
+
+        r2d1: answers.r2d1 || "",
+
+        r2d2: answers.r2d2 || "",
+
+        departmentScore:95,
+
+        companyScore:97
+
+    };
+
+    await fetch("https://script.google.com/macros/s/AKfycbwXzb3YnmiHfOiUpu4coOjRmz3v6RGKDpY6_Ib8D-2QiXVCU4-zMsJdK9odjxmNU6SOtw/exec", {
+
+        method:"POST",
+
+        headers:{
+            "Content-Type":"application/json"
+        },
+
+        body:JSON.stringify(data)
+
+    });
+
+}
 </script>
 </body>
 </html>
