@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operation: Break the Silo</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --cyan: #00d4ff;
+    --green: #00ff88;
+    --orange: #ff8c00;
+    --red: #ff4d4d;
+    --bg: #030810;
+    --surface: #0a0f1e;
+    --surface2: #0d1525;
+    --border: rgba(0,212,255,0.15);
+    --border2: rgba(0,212,255,0.08);
+    --text: #c8dde8;
+    --muted: #5a7a8a;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 14px;
+    overflow: hidden;
+  }
+
+  /* ── Layout ─────────────────────────────────────────── */
+  #app {
+    width: 100vw; height: 100vh;
+    display: flex; flex-direction: column;
+    position: relative; overflow: hidden;
+  }
+
+  /* Scanline overlay */
+  #app::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px);
+    pointer-events: none; z-index: 100;
+  }
+
+  /* Grid bg */
+  #app::after {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── Top bar ─────────────────────────────────────────── */
+  #topbar {
+    height: 44px;
+    background: rgba(10,15,30,0.95);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; flex-shrink: 0; z-index: 10; position: relative;
+  }
+  .tb-left { display: flex; align-items: center; gap: 10px; }
+  .tb-logo { font-family: var(--font-display); font-size: 13px; font-weight: 600; color: var(--cyan); letter-spacing: 2px; }
+  .tb-sep { width: 1px; height: 18px; background: var(--border); }
+  .tb-mission { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .tb-right { display: flex; align-items: center; gap: 16px; }
+  .tb-badge { font-size: 10px; padding: 3px 10px; border-radius: 20px; letter-spacing: 1px; font-weight: 600; }
+  .tb-r1 { background: rgba(0,212,255,0.1); color: var(--cyan); border: 1px solid rgba(0,212,255,0.25); }
+  .tb-r2 { background: rgba(0,255,136,0.1); color: var(--green); border: 1px solid rgba(0,255,136,0.25); }
+  #timer-display { font-family: var(--font-display); font-size: 13px; color: var(--orange); display: flex; align-items: center; gap: 5px; }
+
+  /* ── Progress bar ────────────────────────────────────── */
+  #progress-track {
+    height: 2px; background: rgba(255,255,255,0.05); flex-shrink: 0; z-index: 10; position: relative;
+  }
+  #progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--cyan), var(--green));
+    transition: width 0.5s ease; width: 0%;
+  }
+
+  /* ── Screens ─────────────────────────────────────────── */
+  #screens { flex: 1; position: relative; z-index: 5; overflow: hidden; }
+  .screen {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+    opacity: 0; pointer-events: none;
+    transform: translateX(30px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+  }
+  .screen.active {
+    opacity: 1; pointer-events: all; transform: translateX(0);
+  }
+  .screen.exit {
+    opacity: 0; transform: translateX(-30px);
+  }
+
+  /* ── Cards ───────────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px 36px;
+    width: 100%; max-width: 700px;
+    position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  }
+
+  /* ── Typography ──────────────────────────────────────── */
+  .eyebrow {
+    font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--cyan); margin-bottom: 10px; font-weight: 600;
+  }
+  .eyebrow.warn { color: var(--orange); }
+  .eyebrow.success { color: var(--green); }
+  .eyebrow.danger { color: var(--red); }
+
+  h1 { font-family: var(--font-display); font-size: 36px; font-weight: 700; color: #fff; line-height: 1.1; }
+  h2 { font-family: var(--font-display); font-size: 22px; font-weight: 600; color: #fff; }
+  h3 { font-family: var(--font-display); font-size: 16px; font-weight: 600; color: var(--text); }
+  p  { line-height: 1.7; color: var(--muted); font-size: 13px; }
+  strong { color: var(--text); font-weight: 500; }
+
+  /* ── Buttons ─────────────────────────────────────────── */
+  .btn-row { display: flex; gap: 10px; margin-top: 24px; }
+  .btn {
+    flex: 1; padding: 12px 20px; border-radius: 10px; border: 1px solid var(--border);
+    background: transparent; color: var(--text); font-family: var(--font-body);
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    transition: all 0.2s; letter-spacing: 0.3px;
+  }
+  .btn:hover { background: rgba(255,255,255,0.04); border-color: rgba(0,212,255,0.4); color: #fff; }
+  .btn.primary {
+    background: rgba(0,212,255,0.1); border-color: rgba(0,212,255,0.5); color: var(--cyan);
+  }
+  .btn.primary:hover { background: rgba(0,212,255,0.18); }
+  .btn.success-btn {
+    background: rgba(0,255,136,0.1); border-color: rgba(0,255,136,0.5); color: var(--green);
+  }
+  .btn.success-btn:hover { background: rgba(0,255,136,0.18); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+
+  /* ── Dept grid ───────────────────────────────────────── */
+  .dept-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 20px 0;
+  }
+  .dept-card {
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 12px; padding: 14px 8px; text-align: center;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .dept-card:hover { border-color: rgba(0,212,255,0.4); background: rgba(0,212,255,0.05); }
+  .dept-card.picked { border-color: var(--cyan); background: rgba(0,212,255,0.1); }
+  .dept-card .di { font-size: 24px; margin-bottom: 6px; }
+  .dept-card .dn { font-size: 10px; color: var(--muted); font-weight: 500; letter-spacing: 0.5px; }
+  .dept-card.picked .dn { color: var(--cyan); }
+
+  /* ── Decision cards ──────────────────────────────────── */
+  .decision-block {
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 12px; padding: 18px; margin-bottom: 12px;
+  }
+  .decision-dept { font-size: 10px; color: var(--cyan); letter-spacing: 2px; font-weight: 600; margin-bottom: 8px; }
+  .decision-q { font-size: 13px; color: var(--text); line-height: 1.6; margin-bottom: 12px; }
+  .decision-hint { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+  .opts { display: flex; gap: 8px; }
+  .opt {
+    flex: 1; padding: 10px; border-radius: 8px;
+    border: 1px solid rgba(90,122,138,0.3);
+    background: transparent; color: var(--muted); font-size: 12px; cursor: pointer;
+    transition: all 0.2s; text-align: center; font-family: var(--font-body); line-height: 1.4;
+  }
+  .opt:hover { border-color: rgba(0,212,255,0.5); color: var(--text); background: rgba(0,212,255,0.05); }
+  .opt.chosen-yes { border-color: var(--cyan); color: var(--cyan); background: rgba(0,212,255,0.08); }
+  .opt.chosen-no  { border-color: var(--orange); color: var(--orange); background: rgba(255,140,0,0.08); }
+
+  /* ── Score reveal ────────────────────────────────────── */
+  .score-list { margin: 16px 0; }
+  .score-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid var(--border2);
+  }
+  .score-dept-name { font-size: 13px; color: var(--muted); }
+  .score-val-good { font-size: 13px; font-weight: 600; color: var(--green); }
+  .company-score-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 16px; background: rgba(255,77,77,0.06);
+    border: 1px solid rgba(255,77,77,0.2); border-radius: 10px; margin-top: 12px;
+  }
+  .company-score-label { font-size: 14px; color: var(--red); font-weight: 600; }
+  .company-score-num { font-size: 28px; font-weight: 700; color: var(--red); font-family: var(--font-display); }
+
+  /* ── Failure reasons ─────────────────────────────────── */
+  .failure-list { background: rgba(255,77,77,0.04); border: 1px solid rgba(255,77,77,0.15); border-radius: 10px; padding: 14px; margin: 14px 0; }
+  .failure-item { display: flex; gap: 10px; padding: 5px 0; font-size: 12px; color: #cc8888; align-items: flex-start; }
+  .failure-icon { color: var(--red); flex-shrink: 0; margin-top: 1px; }
+
+  /* ── Dep chain ───────────────────────────────────────── */
+  .chain { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+  .chain-node {
+    background: var(--surface2); border: 1px solid rgba(255,140,0,0.4);
+    border-radius: 20px; padding: 4px 12px; font-size: 11px; color: var(--orange); font-weight: 500;
+  }
+  .chain-arrow { color: var(--red); font-size: 14px; }
+
+  /* ── Meters ──────────────────────────────────────────── */
+  .meters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
+  .meter-box { background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px; padding: 12px; }
+  .meter-label { font-size: 10px; color: var(--muted); margin-bottom: 8px; letter-spacing: 0.5px; text-transform: uppercase; }
+  .meter-track { height: 5px; background: rgba(255,255,255,0.07); border-radius: 3px; overflow: hidden; }
+  .meter-bar { height: 100%; border-radius: 3px; transition: width 1.2s ease; }
+  .meter-val { font-size: 14px; font-weight: 600; margin-top: 6px; font-family: var(--font-display); }
+  .m-green { color: var(--green); background: var(--green); }
+  .m-cyan  { color: var(--cyan);  background: var(--cyan);  }
+  .m-red   { color: var(--red);   background: rgba(255,77,77,0.7); }
+
+  /* ── Final scores ────────────────────────────────────── */
+  .final-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+  .final-box { background: var(--surface2); border-radius: 12px; padding: 20px; text-align: center; }
+  .final-box.cyan-box { border: 1px solid rgba(0,212,255,0.35); }
+  .final-box.green-box { border: 1px solid rgba(0,255,136,0.35); }
+  .final-big { font-family: var(--font-display); font-size: 44px; font-weight: 700; line-height: 1; }
+  .final-label { font-size: 11px; color: var(--muted); margin-top: 6px; letter-spacing: 0.5px; }
+
+  /* ── Badges ──────────────────────────────────────────── */
+  .badge-row { display: flex; gap: 10px; margin: 16px 0; }
+  .achievement {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 12px; padding: 14px 8px; text-align: center;
+  }
+  .achievement .ai { font-size: 22px; margin-bottom: 6px; }
+  .achievement .at { font-size: 10px; color: var(--green); font-weight: 600; }
+
+  /* ── Reflection ──────────────────────────────────────── */
+  .reflect-q {
+    border-left: 2px solid var(--cyan); padding: 10px 14px;
+    margin: 8px 0; font-size: 13px; color: var(--muted); background: var(--surface2); border-radius: 0 8px 8px 0;
+  }
+
+  /* ── Welcome specific ────────────────────────────────── */
+  .welcome-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 20px 0; }
+  .stat-pill {
+    background: var(--surface2); border: 1px solid var(--border2); border-radius: 10px;
+    padding: 12px; text-align: center;
+  }
+  .stat-pill .sv { font-family: var(--font-display); font-size: 18px; font-weight: 600; color: var(--cyan); }
+  .stat-pill .sl { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Alert bar ───────────────────────────────────────── */
+  .alert {
+    font-size: 11px; padding: 8px 12px; border-radius: 8px; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .alert.warn { background: rgba(255,140,0,0.08); border: 1px solid rgba(255,140,0,0.25); color: var(--orange); }
+  .alert.info { background: rgba(0,212,255,0.06); border: 1px solid rgba(0,212,255,0.2); color: var(--cyan); }
+
+  /* ── Confetti canvas ─────────────────────────────────── */
+  #confetti-canvas { position: fixed; inset: 0; pointer-events: none; z-index: 200; }
+
+  /* ── Scrollable inner ────────────────────────────────── */
+  .inner { width: 100%; max-width: 700px; max-height: calc(100vh - 80px); overflow-y: auto; }
+  .inner::-webkit-scrollbar { width: 4px; }
+  .inner::-webkit-scrollbar-track { background: transparent; }
+  .inner::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .spacer { height: 10px; }
+  .divider { height: 1px; background: var(--border2); margin: 16px 0; }
+
+  /* two-col layout for wider screens */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+</style>
+</head>
+<body>
+<canvas id="confetti-canvas"></canvas>
+<div id="app">
+
+  <!-- Top bar -->
+  <div id="topbar">
+    <div class="tb-left">
+      <div class="tb-logo">⬡ SHIELDCORP</div>
+      <div class="tb-sep"></div>
+      <div class="tb-mission">Operation: Break the Silo</div>
+    </div>
+    <div class="tb-right">
+      <div id="round-badge" class="tb-badge tb-r1">ROUND 1</div>
+      <div id="timer-display" style="display:none">⏱ <span id="timer-val">05:00</span></div>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div id="progress-track"><div id="progress-fill"></div></div>
+
+  <!-- Screens -->
+  <div id="screens">
+
+    <!-- S1: Welcome -->
+    <div class="screen active" id="s1">
+      <div class="inner">
+        <div class="card">
+          <div class="eyebrow">⬡ Classified Simulation · All-Staff Clearance</div>
+          <h1>Operation:<br>Break the Silo</h1>
+          <div style="margin: 14px 0;">
+            <p>A critical cybersecurity product launch is underway. Every department is confident. Every decision has already been made — <strong>independently</strong>. What could go wrong?</p>
+          </div>
+          <div class="welcome-grid">
+            <div class="stat-pill"><div class="sv">15 min</div><div class="sl">Duration</div></div>
+            <div class="stat-pill"><div class="sv">11</div><div class="sl">Departments</div></div>
+            <div class="stat-pill"><div class="sv">2</div><div class="sl">Rounds</div></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn primary" onclick="go(2)">Initiate Mission →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S2: Story -->
+    <div class="screen" id="s2">
+      <div class="inner">
+        <div class="card">
+          <div class="eyebrow">Mission Briefing</div>
+          <h2>ShieldCore™ 5.0 launches in 72 hours.</h2>
+          <div class="spacer"></div>
+          <p>Months of work. Millions at stake. The press is watching. Enterprise clients are waiting. Marketing has booked the media slots. Sales has promised the demo.</p>
+          <div class="spacer"></div>
+          <p>Each department received its own briefing — independently. Each has its objectives, its deadlines, and its decisions to make.</p>
+          <div class="spacer"></div>
+          <div class="alert warn">⚠ What no one knows yet: every decision you make affects every other department.</div>
+          <p>Your mission: make the best call for your team. Then discover what really happened to the company.</p>
+          <div class="btn-row">
+            <button class="btn" onclick="go(1)">← Back</button>
+            <button class="btn primary" onclick="go(3)">Select Your Department →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S3: Dept Selection -->
+    <div class="screen" id="s3">
+      <div class="inner">
+        <div class="card">
+          <div class="eyebrow">Round 1 — Independent Decisions</div>
+          <h2>Choose your department</h2>
+          <p style="margin-top:6px;">You'll receive classified intel for your department only.</p>
+          <div class="dept-grid">
+            <div class="dept-card" onclick="pickDept(this,'Marketing')"><div class="di">📢</div><div class="dn">Marketing</div></div>
+            <div class="dept-card" onclick="pickDept(this,'Product')"><div class="di">⚙️</div><div class="dn">Product</div></div>
+            <div class="dept-card" onclick="pickDept(this,'Engineering')"><div class="di">💻</div><div class="dn">Engineering</div></div>
+            <div class="dept-card" onclick="pickDept(this,'Sales')"><div class="di">🤝</div><div class="dn">Sales</div></div>
+            <div class="dept-card" onclick="pickDept(this,'Support')"><div class="di">🎧</div><div class="dn">Support</div></div>
+            <div class="dept-card" onclick="pickDept(this,'Finance')"><div class="di">💰</div><div class="dn">Finance</div></div>
+            <div class="dept-card" onclick="pickDept(this,'HR')"><div class="di">👥</div><div class="dn">HR</div></div>
+            <div class="dept-card" onclick="pickDept(this,'IT')"><div class="di">🖥️</div><div class="dn">IT</div></div>
+            <div class="dept-card" onclick="pickDept(this,'Legal')"><div class="di">⚖️</div><div class="dn">Legal</div></div>
+            <div class="dept-card" onclick="pickDept(this,'Admin')"><div class="di">📋</div><div class="dn">Admin</div></div>
+            <div class="dept-card" onclick="pickDept(this,'Delivery')"><div class="di">🚀</div><div class="dn">Delivery</div></div>
+            <div class="dept-card" onclick="pickDept(this,'Leadership')"><div class="di">🏛️</div><div class="dn">Leadership</div></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn" onclick="go(2)">← Back</button>
+            <button class="btn primary" id="confirmDept" onclick="go(4)" disabled>Confirm &amp; Get Briefing →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S4: Round 1 Decisions -->
+    <div class="screen" id="s4">
+      <div class="inner">
+        <div class="card">
+          <div class="eyebrow warn">⚠ Classified — Your Eyes Only</div>
+          <h2 id="dept-title">Marketing Department</h2>
+          <div class="alert warn">You have access to your department's data only. Make your best call.</div>
+
+          <div class="decision-block">
+            <div class="decision-dept">MARKETING</div>
+            <div class="decision-q">The campaign is fully designed. Media slots are booked — 4.2M impressions projected. Should you launch the campaign immediately to maximise launch-day buzz?</div>
+            <div class="decision-hint">Your data: 92% campaign readiness · Media reach confirmed · Budget approved</div>
+            <div class="opts">
+              <button class="opt" onclick="choose(this,'yes','d1')">🚀 Launch Now<br><small>Maximise visibility</small></button>
+              <button class="opt" onclick="choose(this,'no','d1')">⏳ Wait One Week<br><small>Await confirmation</small></button>
+            </div>
+          </div>
+
+          <div class="decision-block">
+            <div class="decision-dept">SALES</div>
+            <div class="decision-q">A key enterprise client is requesting Feature X — it's listed on the product roadmap. Should you promise it will be available at launch to close the deal?</div>
+            <div class="decision-hint">Deal value: ₹2.4Cr · Client deadline: launch day · Feature status: roadmap Q2</div>
+            <div class="opts">
+              <button class="opt" onclick="choose(this,'yes','d2')">✅ Promise Feature X<br><small>Close the deal now</small></button>
+              <button class="opt" onclick="choose(this,'no','d2')">❌ Decline Commitment<br><small>Manage expectations</small></button>
+            </div>
+          </div>
+
+          <div class="decision-block">
+            <div class="decision-dept">FINANCE</div>
+            <div class="decision-q">Engineering needs emergency server capacity budget approved today — ₹18L — to handle expected launch traffic. Standard process takes 5 days.</div>
+            <div class="decision-hint">Current budget utilisation: 94% · Launch traffic estimate: 8× normal load</div>
+            <div class="opts">
+              <button class="opt" onclick="choose(this,'yes','d3')">✅ Fast-Track Approve<br><small>Break process once</small></button>
+              <button class="opt" onclick="choose(this,'no','d3')">📋 Standard Process<br><small>Follow protocol</small></button>
+            </div>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn primary" id="submitBtn" onclick="go(5)">Submit Decisions →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S5: Company Failure -->
+    <div class="screen" id="s5">
+      <div class="inner">
+        <div class="card">
+          <div class="eyebrow danger">⚠ Mission Status: Critical Failure</div>
+          <h2>Every department scored high.<br>The company didn't.</h2>
+          <div class="score-list">
+            <div class="score-row"><span class="score-dept-name">Marketing</span><span class="score-val-good">96%</span></div>
+            <div class="score-row"><span class="score-dept-name">Product</span><span class="score-val-good">94%</span></div>
+            <div class="score-row"><span class="score-dept-name">Sales</span><span class="score-val-good">98%</span></div>
+            <div class="score-row"><span class="score-dept-name">Support</span><span class="score-val-good">95%</span></div>
+            <div class="score-row"><span class="score-dept-name">Finance</span><span class="score-val-good">91%</span></div>
+            <div class="score-row"><span class="score-dept-name">Engineering</span><span class="score-val-good">93%</span></div>
+          </div>
+          <div class="company-score-row">
+            <span class="company-score-label">🏢 Company Success Rate</span>
+            <span class="company-score-num" id="companyScore">0%</span>
+          </div>
+          <div class="failure-list">
+            <div class="failure-item"><span class="failure-icon">→</span><span>Marketing launched before Product finished security validation</span></div>
+            <div class="failure-item"><span class="failure-icon">→</span><span>Sales promised Feature X — Engineering had silently deprioritised it</span></div>
+            <div class="failure-item"><span class="failure-icon">→</span><span>Support team was not trained on the new interface in time</span></div>
+            <div class="failure-item"><span class="failure-icon">→</span><span>Finance approval arrived 2 days late — servers weren't scaled</span></div>
+            <div class="failure-item"><span class="failure-icon">→</span><span>3 enterprise clients lost trust. Media sentiment turned negative.</span></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn primary" onclick="go(6)">See the dependency chain →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S6: Dependency Chain -->
+    <div class="screen" id="s6">
+      <div class="inner">
+        <div class="card">
+          <div class="eyebrow">The Invisible Chain</div>
+          <h2>No department could see the full picture.</h2>
+          <p style="margin-top:8px;">Each made a rational decision. Together, they created a systemic failure.</p>
+          <div class="spacer"></div>
+          <div class="chain">
+            <div class="chain-node">Marketing launches</div><div class="chain-arrow">→</div>
+            <div class="chain-node">Customers expect product</div><div class="chain-arrow">→</div>
+            <div class="chain-node">Bug not validated</div><div class="chain-arrow">→</div>
+            <div class="chain-node">Bug goes live</div>
+          </div>
+          <div class="chain">
+            <div class="chain-node">Sales promises Feature X</div><div class="chain-arrow">→</div>
+            <div class="chain-node">Engineering unaware</div><div class="chain-arrow">→</div>
+            <div class="chain-node">Feature missing</div><div class="chain-arrow">→</div>
+            <div class="chain-node">Client churns</div>
+          </div>
+          <div class="chain">
+            <div class="chain-node">HR delays hire</div><div class="chain-arrow">→</div>
+            <div class="chain-node">Support understaffed</div><div class="chain-arrow">→</div>
+            <div class="chain-node">Tickets pile up</div><div class="chain-arrow">→</div>
+            <div class="chain-node">NPS drops</div>
+          </div>
+          <div class="chain">
+            <div class="chain-node">Finance delays budget</div><div class="chain-arrow">→</div>
+            <div class="chain-node">Servers not scaled</div><div class="chain-arrow">→</div>
+            <div class="chain-node">Platform slow</div><div class="chain-arrow">→</div>
+            <div class="chain-node">Churn spike</div>
+          </div>
+          <div class="divider"></div>
+          <div class="alert info">🔓 Round 2 unlocked — you can now see cross-department information before deciding.</div>
+          <div class="btn-row">
+            <button class="btn success-btn" onclick="startR2()">Begin Round 2: Collaborate →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S7: Round 2 -->
+    <div class="screen" id="s7">
+      <div class="inner">
+        <div class="card">
+          <div class="eyebrow success">🔓 Round 2 — Cross-Department Intel Unlocked</div>
+          <h2>Same decisions. Full picture.</h2>
+          <div class="alert info">You can now see what other departments know. Make aligned decisions.</div>
+
+          <div class="decision-block" style="border-color: rgba(0,212,255,0.25);">
+            <div class="decision-dept">MARKETING + PRODUCT INTEL</div>
+            <div class="decision-q">Product confirms a critical security validation is pending — ETA 5 days. Should the campaign launch now or align with Product's sign-off?</div>
+            <div class="decision-hint">🔓 New intel: Product bug fix ETA 5 days · Legal sign-off pending · Support training incomplete</div>
+            <div class="opts">
+              <button class="opt" onclick="choose(this,'no','r2d1')">✅ Delay to align with Product<br><small>Coordinate launch date</small></button>
+              <button class="opt" onclick="choose(this,'yes','r2d1')">🚀 Launch anyway<br><small>Ignore dependencies</small></button>
+            </div>
+          </div>
+
+          <div class="decision-block" style="border-color: rgba(0,212,255,0.25);">
+            <div class="decision-dept">SALES + ENGINEERING INTEL</div>
+            <div class="decision-q">Engineering confirms Feature X has been moved to Q3. Should Sales commit to the client with a realistic Q3 date and offer a bridge solution?</div>
+            <div class="decision-hint">🔓 New intel: Feature X → Q3 roadmap · Alternative feature available now · Competitor offering similar</div>
+            <div class="opts">
+              <button class="opt" onclick="choose(this,'no','r2d2')">✅ Honest timeline + bridge offer<br><small>Retain trust</small></button>
+              <button class="opt" onclick="choose(this,'yes','r2d2')">❌ Promise Q2 anyway<br><small>Risk the relationship</small></button>
+            </div>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn success-btn" onclick="go(8)">Submit Round 2 →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S8: Final Success -->
+    <div class="screen" id="s8">
+      <div class="inner">
+        <div class="card" style="border-color: rgba(0,255,136,0.25);">
+          <div class="eyebrow success">✓ Mission Accomplished</div>
+          <h2>ShieldCore™ 5.0 launched successfully.</h2>
+          <p style="margin-top:6px;">Customer trust restored. Media sentiment positive. Revenue target exceeded.</p>
+
+          <div class="final-grid">
+            <div class="final-box cyan-box">
+              <div class="final-big" style="color:var(--cyan)" id="deptScore">0%</div>
+              <div class="final-label">Department Score</div>
+            </div>
+            <div class="final-box green-box">
+              <div class="final-big" style="color:var(--green)" id="compScore2">0%</div>
+              <div class="final-label">Company Success</div>
+            </div>
+          </div>
+
+          <div class="meters">
+            <div class="meter-box">
+              <div class="meter-label">Customer Trust</div>
+              <div class="meter-track"><div class="meter-bar m-green" id="m1" style="width:0%"></div></div>
+              <div class="meter-val m-green">95%</div>
+            </div>
+            <div class="meter-box">
+              <div class="meter-label">Revenue Target</div>
+              <div class="meter-track"><div class="meter-bar m-cyan" id="m2" style="width:0%"></div></div>
+              <div class="meter-val m-cyan">92%</div>
+            </div>
+            <div class="meter-box">
+              <div class="meter-label">Media Sentiment</div>
+              <div class="meter-track"><div class="meter-bar m-green" id="m3" style="width:0%"></div></div>
+              <div class="meter-val m-green">88%</div>
+            </div>
+            <div class="meter-box">
+              <div class="meter-label">Risk Level</div>
+              <div class="meter-track"><div class="meter-bar m-green" id="m4" style="width:0%"></div></div>
+              <div class="meter-val m-green">Low</div>
+            </div>
+          </div>
+
+          <div style="background:rgba(0,255,136,0.05); border:1px solid rgba(0,255,136,0.2); border-radius:10px; padding:14px; font-size:13px; color:var(--muted); line-height:1.7;">
+            <strong style="color:var(--green);">Key insight:</strong> Individual excellence is necessary — but not sufficient. Organisational success requires communication, alignment, and shared awareness across every department.
+          </div>
+
+          <div class="btn-row">
+            <button class="btn primary" onclick="go(9)">Reflect &amp; Debrief →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S9: Reflection -->
+    <div class="screen" id="s9">
+      <div class="inner">
+        <div class="card">
+          <div class="eyebrow">Personal Reflection</div>
+          <h2>What did you learn?</h2>
+          <p style="margin-top:6px; margin-bottom:16px;">Take 2 minutes to reflect before the group debrief.</p>
+
+          <div class="reflect-q">💭 What information were you missing in Round 1 that would have changed your decision?</div>
+          <div class="reflect-q">🔗 Which other department's decision most directly affected your outcome?</div>
+          <div class="reflect-q">📡 What communication channel or habit could have prevented the failure?</div>
+          <div class="reflect-q">🚀 One concrete thing you will do differently in your daily work starting tomorrow?</div>
+
+          <div class="divider"></div>
+
+          <div class="badge-row">
+            <div class="achievement"><div class="ai">🤝</div><div class="at">Collaboration Champion</div></div>
+            <div class="achievement"><div class="ai">🔗</div><div class="at">Dependency Aware</div></div>
+            <div class="achievement"><div class="ai">📡</div><div class="at">Cross-Dept Communicator</div></div>
+            <div class="achievement"><div class="ai">🏆</div><div class="at">Mission Complete</div></div>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn" onclick="go(1)">← Play Again</button>
+            <button class="btn success-btn" onclick="go(10)">View Leaderboard →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S10: Leaderboard -->
+    <div class="screen" id="s10">
+      <div class="inner">
+        <div class="card">
+          <div class="eyebrow success">🏆 Mission Leaderboard</div>
+          <h2>Top Collaborators</h2>
+          <div style="margin: 16px 0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.25);border-radius:10px;margin-bottom:8px;">
+              <span style="font-size:16px;">🥇</span>
+              <span style="font-size:13px;color:var(--text);flex:1;margin-left:12px;">Leadership Team</span>
+              <span style="font-family:var(--font-display);font-size:15px;color:var(--cyan);">98%</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;margin-bottom:8px;">
+              <span style="font-size:16px;">🥈</span>
+              <span style="font-size:13px;color:var(--text);flex:1;margin-left:12px;">Product + Engineering</span>
+              <span style="font-family:var(--font-display);font-size:15px;color:var(--muted);">96%</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;margin-bottom:8px;">
+              <span style="font-size:16px;">🥉</span>
+              <span style="font-size:13px;color:var(--text);flex:1;margin-left:12px;">Sales + Marketing</span>
+              <span style="font-family:var(--font-display);font-size:15px;color:var(--muted);">95%</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;">
+              <span style="font-size:16px;">4.</span>
+              <span style="font-size:13px;color:var(--muted);flex:1;margin-left:12px;">Support + HR</span>
+              <span style="font-family:var(--font-display);font-size:15px;color:var(--muted);">93%</span>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn" onclick="go(1)">← Play Again</button>
+            <button class="btn primary" onclick="alert('Certificate saved! Show this screen to your facilitator.')">🎓 Claim Certificate</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /screens -->
+</div><!-- /app -->
+
+<script>
+  let selectedDept = null;
+  let timerInt = null;
+  let timerSecs = 300;
+  const STEPS = {1:5,2:15,3:25,4:40,5:55,6:65,7:75,8:87,9:93,10:100};
+
+  function go(n) {
+    document.querySelectorAll('.screen').forEach(s => {
+      if(s.classList.contains('active')) { s.classList.add('exit'); setTimeout(()=>s.classList.remove('active','exit'),350); }
+    });
+    setTimeout(()=>{
+      const t = document.getElementById('s'+n);
+      if(t) t.classList.add('active');
+    }, 120);
+    document.getElementById('progress-fill').style.width = (STEPS[n]||5)+'%';
+    if(n===4) startTimer(); else stopTimer();
+    if(n===5) animateCompanyScore();
+    if(n===8) animateFinal();
+  }
+
+  function pickDept(el, name) {
+    document.querySelectorAll('.dept-card').forEach(c=>c.classList.remove('picked'));
+    el.classList.add('picked');
+    selectedDept = name;
+    document.getElementById('dept-title').textContent = name+' Department';
+    const btn = document.getElementById('confirmDept');
+    btn.disabled = false;
+  }
+
+  function choose(el, val, id) {
+    const row = el.closest('.opts');
+    row.querySelectorAll('.opt').forEach(b=>b.className='opt');
+    el.classList.add(val==='yes'?'chosen-yes':'chosen-no');
+  }
+
+  function startTimer() {
+    timerSecs = 300;
+    const el = document.getElementById('timer-val');
+    const disp = document.getElementById('timer-display');
+    disp.style.display = 'flex';
+    stopTimer();
+    timerInt = setInterval(()=>{
+      timerSecs--;
+      const m=Math.floor(timerSecs/60).toString().padStart(2,'0');
+      const s=(timerSecs%60).toString().padStart(2,'0');
+      el.textContent = m+':'+s;
+      if(timerSecs<=0) stopTimer();
+    },1000);
+  }
+  function stopTimer() {
+    clearInterval(timerInt);
+    document.getElementById('timer-display').style.display='none';
+  }
+
+  function animateCompanyScore() {
+    const el = document.getElementById('companyScore');
+    let v=0;
+    const iv=setInterval(()=>{ v+=2; el.textContent=v+'%'; if(v>=54)clearInterval(iv); },30);
+  }
+
+  function startR2() {
+    document.getElementById('round-badge').className='tb-badge tb-r2';
+    document.getElementById('round-badge').textContent='ROUND 2';
+    go(7);
+  }
+
+  function animateFinal() {
+    const ds = document.getElementById('deptScore');
+    const cs = document.getElementById('compScore2');
+    let v=0;
+    const iv=setInterval(()=>{ v+=2; ds.textContent=v+'%'; cs.textContent=v+'%'; if(v>=95){ ds.textContent='95%'; clearInterval(iv); setTimeout(()=>{ let v2=95; const iv2=setInterval(()=>{ v2++; cs.textContent=v2+'%'; if(v2>=97){clearInterval(iv2); launchConfetti();} },40); },200); } },25);
+    setTimeout(()=>{ document.getElementById('m1').style.width='95%'; document.getElementById('m2').style.width='92%'; document.getElementById('m3').style.width='88%'; document.getElementById('m4').style.width='12%'; },400);
+  }
+
+  function launchConfetti() {
+    const canvas = document.getElementById('confetti-canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const pieces = Array.from({length:120},()=>({
+      x: Math.random()*canvas.width, y: -10,
+      r: Math.random()*6+3,
+      color: ['#00d4ff','#00ff88','#ff8c00','#ffffff','#7090a0'][Math.floor(Math.random()*5)],
+      vx: (Math.random()-0.5)*4, vy: Math.random()*4+2,
+      alpha: 1
+    }));
+    let frame=0;
+    function draw() {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      pieces.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.alpha-=0.008; ctx.globalAlpha=Math.max(0,p.alpha); ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); });
+      frame++;
+      if(frame<180) requestAnimationFrame(draw); else ctx.clearRect(0,0,canvas.width,canvas.height);
+    }
+    draw();
+  }
+</script>
+</body>
+</html>
